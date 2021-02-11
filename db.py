@@ -1,12 +1,8 @@
 import sqlite3
 import pandas as pd
-import numpy as np
 import csv
 import sys
-from sklearn.neighbors import KNeighborsClassifier
-from sklearn import model_selection
 import pickle
-from players import select_values, delete_values
 from graphs import plot_shot_dist, plot_clutch, plot_consistency
 from scraper import scrape
 

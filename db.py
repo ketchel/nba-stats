@@ -3,7 +3,6 @@ import pandas as pd
 import numpy as np
 import csv
 import sys
-import os
 from sklearn.neighbors import KNeighborsClassifier
 from sklearn import model_selection
 import pickle
@@ -29,39 +28,18 @@ def execute(conn, sql):
         conn.commit()
     except Exception as e:
         print(e)
-
-def fetchall(conn, sql):
-    try:
-        cursor = conn.cursor()
-        cursor.execute(sql)
-        return cursor.fetchall()
-    except Exception as e:
-        print(e)
-        return []
     
 
 """
 COMMANDS
 """    
-def quote_illegals(cols):
-    """
-    This function puts quotes around column names with characters, such as %,  
-    that will cause SQL syntax errors without the quotes.
-    This could be more efficent, but it doesn't really matter
-    seeing as there will never be very many columns.
-    """
-
-    illegals =['%', '/']
-
-    for i in range(len(cols)):
-        for ill in illegals:
-            if ill in cols[i] or any(x.isdigit() for x in cols[i]):
-                cols[i] = f" \"{cols[i]}\" "
-
-
     
 def csv_to_table(conn, table_name, file_name):
-    dat_path = "C:\\Users\\ketch\\Desktop\\Projects\\NBA\\data\\" + file_name
+    """
+    This function takes a .csv file and creates a SQL table with the data.
+    """
+
+    dat_path = "C:\\Users\\ketch\\Desktop\\Projects\\NBA\\data\\" + file_name # Make sure the file path is correct
 
     cols = next(csv.reader(open(dat_path)))
     quote_illegals(cols)
@@ -76,60 +54,6 @@ def tables(conn):
 
 def schema(conn):
     execute(conn, '.schema')
-
-def assign_numbers(arr):
-    arr[arr == None] = ''
-    unique = np.unique(arr)
-    
-    lookup = dict(zip(unique, range(len(unique))))
-
-    number_list = []
-    for item in arr:
-        number_list.append(lookup[item])
-
-    return (number_list, lookup)
-
-def get_data(conn, xs, y, table_name):
-    xs_list = xs.split(',')
-    sql_get_xs = select_values(xs_list, table_name)
-    sql_get_y = select_values(y, table_name)
-    
-    xs_data = pd.read_sql(sql_get_xs, conn)
-    y_data = pd.read_sql(sql_get_y, conn)
-
-    return xs_data, y_data
-
-
-# The following functions produce graphs
-def shot_dist(conn, firstname, lastname):
-    
-    sql_query = 'SELECT ShotDist,ShotOutcome FROM PBP WHERE Shooter LIKE \''+firstname[0]+'. '+lastname+'%\';'
-
-    tbl = pd.read_sql(sql_query,conn)
-    dists = tbl.values[:, 0]
-    outcomes = tbl.values[:, 1]
-
-    plot_shot_dist(dists, outcomes, firstname, lastname)
-
-
-def clutch(conn):
-
-    query = """SELECT Shooter,ShotOutcome FROM PBP WHERE 
-                (Quarter>=4 AND SecLeft<=120 AND ABS(AwayScore-HomeScore)<=5 AND Shooter IS NOT NULL) ORDER BY Shooter;"""
-
-    data = pd.read_sql(query, conn)    
-
-    plot_clutch(data)
-
-
-def consistency(conn, stat):
-
-    query = f"SELECT playFNm || ' ' || playLNm AS name,\"play{stat}\" FROM Game ORDER BY name;"
-
-    data = pd.read_sql(query, conn)
-
-    plot_consistency(data)
-    
 
 def BR_to_table(conn):
     stats = pd.DataFrame()
@@ -148,6 +72,46 @@ def BR_to_table(conn):
 
     stats.to_sql("PerGame", conn)
 
+
+# The following functions produce graphs
+def shot_dist(conn, firstname, lastname):
+    """
+    Plots the shot distance vs field goals, with seperate bars for made and missed field goals
+    """
+    
+    sql_query = 'SELECT ShotDist,ShotOutcome FROM PBP WHERE Shooter LIKE \''+firstname[0]+'. '+lastname+'%\';'
+
+    tbl = pd.read_sql(sql_query,conn)
+    dists = tbl.values[:, 0]
+    outcomes = tbl.values[:, 1]
+
+    plot_shot_dist(dists, outcomes, firstname, lastname)
+
+
+def clutch(conn):
+    """
+    Plots points vs. FG% in clutch time (<=2 minutes left and point discrepency of <=5)
+    """
+
+    query = """SELECT Shooter,ShotOutcome FROM PBP WHERE 
+                (Quarter>=4 AND SecLeft<=120 AND ABS(AwayScore-HomeScore)<=5 AND Shooter IS NOT NULL) ORDER BY Shooter;"""
+
+    data = pd.read_sql(query, conn)    
+
+    plot_clutch(data)
+
+
+def consistency(conn, stat):
+    """
+    Plots the consistency of players
+    """
+
+    query = f"SELECT playFNm || ' ' || playLNm AS name,\"play{stat}\" FROM Game ORDER BY name;"
+
+    data = pd.read_sql(query, conn)
+
+    plot_consistency(data)
+    
 
 COMMANDS = {
     'csv_to_table': {

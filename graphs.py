@@ -10,6 +10,9 @@ w /= dpi
 h /= dpi
 
 def plot_shot_dist(dists, outcomes, firstname, lastname):
+    """
+    Plots the shot distance vs field goals, with seperate bars for made and missed field goals
+    """
 
     plt.figure(figsize = (w,h))
 
@@ -32,6 +35,9 @@ def plot_shot_dist(dists, outcomes, firstname, lastname):
     plt.show()
 
 def plot_clutch(data):
+    """
+    Plots points vs. FG% in clutch time (<=2 minutes left and point discrepency of <=5)
+    """
 
     plt.figure(figsize = (w,h))
 
@@ -72,6 +78,9 @@ def plot_clutch(data):
 
 
 def plot_consistency(data):
+    """
+    Creates a plot of consistency vs. the given stat per game
+    """
 
     plt.figure(figsize = (w,h))
 
@@ -88,12 +97,15 @@ def plot_consistency(data):
         
         std = pd.Series.std(stats)
 
+        # Put the stats in a dictionary and remove players with 0 STD to avoid divide by zero errors
         if std !=0:
             stat_dict[nm] = [pd.Series.mean(stats), 1/pd.Series.std(stats)]
         else:
             stat_dict[nm] = [pd.Series.mean(stats), -1]
 
     for nm in nms:
+        # Change the number after stat_dict[nm][0]> to have that be the minimum 
+        # stat per game displayed on the plot
         if stat_dict[nm][0]>17 and stat_dict[nm][1] > 0:
             ppgs.append(stat_dict[nm][0])
             stds.append(stat_dict[nm][1])

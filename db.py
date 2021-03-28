@@ -4,7 +4,7 @@ import csv
 import sys
 import pickle
 from graphs import plot_shot_dist, plot_clutch, plot_consistency
-from scraper import scrape
+from scraper import scrape, pbp_scrape
 
 
 def connection(db_file):
@@ -68,6 +68,19 @@ def BR_to_table(conn):
 
     stats.to_sql("PerGame", conn)
 
+def pbp_to_table(conn):
+
+    tbl = pd.DataFrame()
+
+    for year in range(2001, 2006):
+        for month in [10,11,12,1,2,3,4,5,6]:
+            for day in range(31,32):
+
+                tbl = tbl.append(pbp_scrape(str(day), str(month), str(year)))
+
+    tbl.to_sql("PBP", conn, if_exists = "append", index = False)
+
+            
 
 # The following functions produce graphs
 def shot_dist(conn, firstname, lastname):
@@ -115,11 +128,6 @@ COMMANDS = {
         'handler': csv_to_table,
         'usage': "csv_to_table <table_name> <file_name>"
     },
-    'create_model':{
-        'num_args': 4,
-        'handler': create_model,
-        'usage': "create_model <model_name> <xs> <y> <table_name>"
-    },
     'shot_dist': {
         'num_args': 2,
         'handler': shot_dist,
@@ -139,6 +147,11 @@ COMMANDS = {
         'num_args': 0,
         'handler': BR_to_table,
         'usage': 'BR_to_table <url>'
+    },
+    'pbp_to_table':{
+        'num_args': 0,
+        'handler': pbp_to_table,
+        'usage': 'pbp_to_table <url>'
     }
 }
 

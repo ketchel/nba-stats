@@ -2,19 +2,13 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 from adjustText import adjust_text
-from win32api import GetSystemMetrics
-
-w,h = GetSystemMetrics(0), GetSystemMetrics(1)
-dpi = 100
-w /= dpi
-h /= dpi
 
 def plot_shot_dist(dists, outcomes, firstname, lastname):
     """
     Plots the shot distance vs field goals, with seperate bars for made and missed field goals
     """
 
-    plt.figure(figsize = (w,h))
+    plt.figure(figsize = (10,12))
 
     makes,misses = [],[]
 
@@ -39,7 +33,7 @@ def plot_clutch(data):
     Plots points vs. FG% in clutch time (<=2 minutes left and point discrepency of <=5)
     """
 
-    plt.figure(figsize = (w,h))
+    plt.figure(figsize = (10,12))
 
     stat_dict = {}
 

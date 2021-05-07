@@ -295,6 +295,7 @@ def pbp_scrape(d,m,yr):
     else:
         season = str(int(yr)-1)[2:] +"-" + str(yr)[2:]
 
+    # This info could be stored as a datetime in sql, but I prefer having the season over the year
     all_data["Day"] = d
     all_data["Month"] = m
     all_data["Season"] = season

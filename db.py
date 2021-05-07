@@ -2,8 +2,7 @@ import sqlite3
 import pandas as pd
 import csv
 import sys
-import pickle
-from graphs import plot_shot_dist, plot_clutch, plot_consistency
+from datetime import date, timedelta
 from scraper import scrape, pbp_scrape
 
 
@@ -38,89 +37,137 @@ def csv_to_table(conn, table_name, file_name):
     dat_path = "C:\\Users\\ketch\\Desktop\\Projects\\NBA\\data\\" + file_name # Make sure the file path is correct
 
     cols = next(csv.reader(open(dat_path)))
-    quote_illegals(cols)
 
     data = pd.read_csv(dat_path)
     data = pd.DataFrame(data, columns = cols)
 
     data.to_sql(table_name, conn)
 
-def tables(conn):
-    execute(conn, '.tables')
 
-def schema(conn):
-    execute(conn, '.schema')
-
-def BR_to_table(conn):
+def BR_to_table(conn, table_name):
+    """
+    This function will create a table from the data in the link provided
+    for all years entered in the range.
+    This only needs to be run once for each page.
+    The years in the range and the link should be edited for each page. e.g. per36 stats or per game stats etc.
+    """
     stats = pd.DataFrame()
     frames = []
 
-    for year in range(1950, 2021):
-        url = "https://www.basketball-reference.com/leagues/NBA_"+str(year)+"_per_game.html"
+    for year in range(1956, 2021):
+        url = "https://www.basketball-reference.com/leagues/NBA_"+str(year)+"_per_poss.html" # Put your own link in here
+ 
         temp = scrape(url)
-        temp['Year'] = year
+        temp.insert(0, "Season", str(year)[2:] +"-" + str(year+1)[2:])
 
         frames.append(temp)
 
     stats = pd.concat(frames)
 
-    #del stats[u"\xa0"] # Use this if there are empty columns on the BR website
+    # These lines will delete any empty columns
+    blanks = ["\xa0", "", " "]
+    for blank in blanks:
+        if blank in data.columns:
+            del data[blank]
 
-    stats.to_sql("PerGame", conn)
+    stats.to_sql(table_name, conn)
 
 def pbp_to_table(conn):
 
     tbl = pd.DataFrame()
 
-    for year in range(2001, 2006):
+    # Put your own years in here
+    # I reccommend not doing more than a few years at a time as it will take a while to run
+    for year in range(2021, 2022):
         for month in [10,11,12,1,2,3,4,5,6]:
-            for day in range(31,32):
+            for day in range(1,32):
 
                 tbl = tbl.append(pbp_scrape(str(day), str(month), str(year)))
+        print(str(year) + " done")
 
     tbl.to_sql("PBP", conn, if_exists = "append", index = False)
 
-            
 
-# The following functions produce graphs
-def shot_dist(conn, firstname, lastname):
-    """
-    Plots the shot distance vs field goals, with seperate bars for made and missed field goals
-    """
+def update_tables(conn):
+    # Just run this function and all your tables will be updates,
+    # assuming they are entered in the lists pages and tables correctly.
+
+    # Get the date today
+    today = date.today().strftime("%d/%m/%Y")
+
+    today = today.split("/")
+
+    # This will change the format of single digit numbers e.g. '09' to '9' 
+    # Double digits will be unaffected
+    today[0] = str(int(today[0]))
+    today[1] = str(int(today[1]))
+
+    d, m, yr = today[0], today[1], today[2]
+
+    if int(m) <= 12 and int(m) > 9:
+        season = yr[2:] + "-" + str(int(yr)+1)[2:]
+    else:
+        season = str(int(yr)-1)[2:] +"-" + str(yr)[2:]
+
+    # Need to match the stat description in the url to the table name by index
+    # e.g. the url with 'totals' must have the same index as the table Totals
+    # A dictionary could be used here as well if you prefer
+
+    pages = ["totals", "per_game", "per_minute", "per_poss", "advanced"]
+    tables = ["Totals", "PerGame", "Per36", "Per100", "Advanced"]
+
+    for i in range(len(pages)):
+        # Go through each table and update it
+
+        url = "https://www.basketball-reference.com/leagues/NBA_" + str(yr) + "_" + pages[i] + ".html"
+
+        data = scrape(url)
+        data.insert(0, "Season", season)
+
+        # These lines will delete any empty columns
+        blanks = ['\xa0', '', ' ']
+        for blank in blanks:
+            if blank in data.columns:
+                del data[blank]
+
+        # Remove all the out of date data from the table
+        query = "DELETE FROM " + tables[i] + " WHERE Season = \"" + season + "\" ;"
+
+        execute(conn, query)
+
+        # Finally, append the new data
+        data.to_sql(tables[i], conn, if_exists = "append")
     
-    sql_query = 'SELECT ShotDist,ShotOutcome FROM PBP WHERE Shooter LIKE \''+firstname[0]+'. '+lastname+'%\';'
+    # Now all that's left is to update the play-by-play table
+    # Get the date of the last update
 
-    tbl = pd.read_sql(sql_query,conn)
-    dists = tbl.values[:, 0]
-    outcomes = tbl.values[:, 1]
+    query = "SELECT day,month,season FROM PBP WHERE rowid=(SELECT MAX(rowid) FROM PBP);"
 
-    plot_shot_dist(dists, outcomes, firstname, lastname)
+    last_date = pd.read_sql(query,conn).values.tolist()[0]
+    last_d, last_m, last_ssn = last_date[0],last_date[1],last_date[2]
 
+    if int(last_m) <= 12 and int(last_m) > 9:
+        last_yr = last_ssn[:2]
+    else:
+        last_yr = str(last_ssn)[3:]
 
-def clutch(conn):
-    """
-    Plots points vs. FG% in clutch time (<=2 minutes left and point discrepency of <=5)
-    """
+    if int(last_yr)>95:
+        last_yr = "19"+last_yr
+    else:
+        last_yr = "20"+last_yr
 
-    query = """SELECT Shooter,ShotOutcome FROM PBP WHERE 
-                (Quarter>=4 AND SecLeft<=120 AND ABS(AwayScore-HomeScore)<=5 AND Shooter IS NOT NULL) ORDER BY Shooter;"""
+    # Start date is that of the last update, end date is today
+    sdate = date(int(last_yr), int(last_m), int(last_d))
+    edate = date(int(yr), int(m), int(d))
 
-    data = pd.read_sql(query, conn)    
+    delta = edate-sdate
 
-    plot_clutch(data)
+    for i in range(delta.days+1):
+        day = str(sdate + timedelta(days=i)).split("-")
 
+        plays = pbp_scrape(str(int(day[2])), str(int(day[1])), day[0])
 
-def consistency(conn, stat):
-    """
-    Plots the consistency of players
-    """
-
-    query = f"SELECT playFNm || ' ' || playLNm AS name,\"play{stat}\" FROM Game ORDER BY name;"
-
-    data = pd.read_sql(query, conn)
-
-    plot_consistency(data)
-    
+        plays.to_sql("PBP", conn, if_exists = "append", index = False)    
 
 COMMANDS = {
     'csv_to_table': {
@@ -128,30 +175,20 @@ COMMANDS = {
         'handler': csv_to_table,
         'usage': "csv_to_table <table_name> <file_name>"
     },
-    'shot_dist': {
-        'num_args': 2,
-        'handler': shot_dist,
-        'usage': 'shot_dist <firstname> <lastname>'
-    },
-    'clutch':{
-        'num_args': 0,
-        'handler': clutch,
-        'usage': 'clutch'
-    },
-    'consistency':{
-        'num_args': 1,
-        'handler': consistency,
-        'usage': 'consistency <stat>'
-    },
     'BR_to_table':{
-        'num_args': 0,
+        'num_args': 1,
         'handler': BR_to_table,
-        'usage': 'BR_to_table <url>'
+        'usage': 'BR_to_table <table_name>'
     },
     'pbp_to_table':{
         'num_args': 0,
         'handler': pbp_to_table,
-        'usage': 'pbp_to_table <url>'
+        'usage': 'pbp_to_table'
+    },
+    'update_tables':{
+        'num_args': 0,
+        'handler': update_tables,
+        'usage': 'update_tables'
     }
 }
 
